@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sonic"
+version = "0.1.0"
+description = "Sonic: Shifting Focus to Global Audio Perception in Portrait Animation"
+readme = "README.md"
+requires-python = "==3.10.16"
+license = { file = "LICENSE" }
+authors = [{ name = "Sonic Contributors" }]
+dependencies = [
+    "diffusers",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "transformers",
+    "imageio",
+    "imageio-ffmpeg",
+    "gradio",
+    "omegaconf",
+    "tqdm",
+    "librosa",
+    "einops",
+]
