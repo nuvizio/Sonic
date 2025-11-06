@@ -14,6 +14,16 @@ parser.add_argument('--seed', type=int, default=None)
 
 args = parser.parse_args()
 
+if not os.path.isfile(args.image_path):
+    if not os.path.exists(args.image_path):
+        parser.error(f'image_path not found: {args.image_path}')
+    parser.error(f'image_path is not a file: {args.image_path}')
+
+if not os.path.isfile(args.audio_path):
+    if not os.path.exists(args.audio_path):
+        parser.error(f'audio_path not found: {args.audio_path}')
+    parser.error(f'audio_path is not a file: {args.audio_path}')
+
 
 face_info = pipe.preprocess(args.image_path, expand_ratio=0.5)
 print(face_info)

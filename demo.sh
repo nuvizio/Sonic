@@ -1,4 +1,4 @@
-python3 demo.py \
-'examples/image/anime1.png' \
-'examples/wav/sing_female.wav' \
+uv run demo.py \
+'examples/image/female_diaosu.png' \
+'examples/wav/sing_female_10s.wav' \
 'examples/results/anime1-sing_female.mp4'

@@ -142,6 +142,7 @@ class Sonic():
         
         config = self.config
         config.use_interframe = enable_interpolate_frame
+        self.logger.info(f"weight_dtype={config.weight_dtype}, use_interframe={config.use_interframe}")
 
         requested_device_id = device_id
         if requested_device_id < 0:
@@ -331,6 +332,7 @@ class Sonic():
             resolution = f'{raw_w//2*2}x{raw_h//2*2}'
         else:
             resolution = f'{width}x{height}'
+        self.logger.info(f"video size: {resolution}")
 
         video = test(
             pipe,
@@ -362,7 +364,7 @@ class Sonic():
         ffmpeg_command = f'ffmpeg -i "{video_path}" -i "{audio_path}" -s {resolution} -vcodec libx264 -acodec aac -crf 18 -shortest -y "{audio_video_path}"'
         os.system(ffmpeg_command)
         os.remove(video_path)  # Use os.remove instead of rm for Windows compatibility
-        self.logger.info("Saved output {audio_video_path}")
+        self.logger.info(f"Saved output {audio_video_path}")
         
         return 0
         
