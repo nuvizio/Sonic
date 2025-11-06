@@ -6,6 +6,7 @@ import numpy as np
 from omegaconf import OmegaConf
 from tqdm import tqdm
 import cv2
+import logging
 
 from diffusers import AutoencoderKLTemporalDecoder
 from diffusers.schedulers import EulerDiscreteScheduler
@@ -22,6 +23,7 @@ from src.dataset.face_align.align import AlignImage
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+logger = logging.getLogger(__name__)
 
 def test(
     pipe,
@@ -72,6 +74,7 @@ def test(
     audio_tensor_list = []
     uncond_audio_tensor_list = []
     motion_buckets = []
+    logger.info("Processing audio into motion buckets (%d steps)", audio_len // step)
     for i in tqdm(range(audio_len//step)):
 
 
@@ -88,6 +91,7 @@ def test(
         audio_tensor_list.append(cond_audio_clip[0])
         uncond_audio_tensor_list.append(uncond_audio_clip[0])
 
+    logger.info("Starting diffusion inference for %d frames", len(audio_tensor_list))
     video = pipe(
         ref_img,
         clip_img,
@@ -118,6 +122,7 @@ def test(
     # pose_tensor = torch.stack(pose_tensor_list,1).unsqueeze(0)
     video = (video*0.5 + 0.5).clamp(0, 1)
     video = torch.cat([video.to(pipe.device)], dim=0).cpu()
+    logger.info("Inference complete")
 
     return video
 
@@ -126,11 +131,15 @@ class Sonic():
     config_file = os.path.join(BASE_DIR, 'config/inference/sonic.yaml')
     config = OmegaConf.load(config_file)
 
-    def __init__(self,
+    def __init__(self, 
                  device_id=0,
                  enable_interpolate_frame=True,
                  ):
-
+        self.logger = logging.getLogger(__name__)
+        if not self.logger.handlers:
+            logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt="%H:%M:%S")
+        self.logger.info("Initializing Sonic pipeline (device_id=%s, interpolate=%s)", device_id, enable_interpolate_frame)
+        
         config = self.config
         config.use_interframe = enable_interpolate_frame
 
@@ -156,6 +165,7 @@ class Sonic():
             device_str = f"cuda:{requested_device_id}"
 
         config.pretrained_model_name_or_path = os.path.join(BASE_DIR, config.pretrained_model_name_or_path)
+        self.logger.info("Loading diffusion backbone from %s", config.pretrained_model_name_or_path)
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
             config.pretrained_model_name_or_path, 
@@ -183,6 +193,7 @@ class Sonic():
         audio2token_checkpoint_path = os.path.join(BASE_DIR, config.audio2token_checkpoint_path)
         audio2bucket_checkpoint_path = os.path.join(BASE_DIR, config.audio2bucket_checkpoint_path)
 
+        self.logger.info("Loading checkpoint weights")
         unet.load_state_dict(
             torch.load(unet_checkpoint_path, map_location="cpu"),
             strict=True,
@@ -210,6 +221,7 @@ class Sonic():
                 f"Do not support weight dtype: {config.weight_dtype} during training"
             )
 
+        self.logger.info("Loading Whisper encoder")
         whisper = WhisperModel.from_pretrained(os.path.join(BASE_DIR, 'checkpoints/whisper-tiny/')).to(device).eval()
         
         whisper.requires_grad_(False)
@@ -217,8 +229,10 @@ class Sonic():
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(os.path.join(BASE_DIR, 'checkpoints/whisper-tiny/'))
 
         det_path = os.path.join(BASE_DIR, os.path.join(BASE_DIR, 'checkpoints/yoloface_v5m.pt'))
+        self.logger.info("Loading face detector from %s", det_path)
         self.face_det = AlignImage(device_str, det_path=det_path)
         if config.use_interframe:
+            self.logger.info("Loading RIFE interpolator")
             rife = RIFEModel(device=device_str)
             rife.load_model(os.path.join(BASE_DIR, 'checkpoints', 'RIFE/'))
             self.rife = rife
@@ -235,7 +249,7 @@ class Sonic():
             scheduler=val_noise_scheduler,
         )
         pipe = pipe.to(device=device, dtype=weight_dtype)
-
+        self.logger.info("Initialization complete. Ready for inference.")
 
         self.pipe = pipe
         self.whisper = whisper
@@ -253,6 +267,7 @@ class Sonic():
         h, w = face_image.shape[:2]
         _, _, bboxes = self.face_det(face_image, maxface=True)
         face_num = len(bboxes)
+        self.logger.info(f"Had {face_num} faces detected.")
         bbox = []
         if face_num > 0:
             x1, y1, ww, hh = bboxes[0]
@@ -347,6 +362,7 @@ class Sonic():
         ffmpeg_command = f'ffmpeg -i "{video_path}" -i "{audio_path}" -s {resolution} -vcodec libx264 -acodec aac -crf 18 -shortest -y "{audio_video_path}"'
         os.system(ffmpeg_command)
         os.remove(video_path)  # Use os.remove instead of rm for Windows compatibility
+        self.logger.info("Saved output {audio_video_path}")
         
         return 0
         
