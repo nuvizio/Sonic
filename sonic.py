@@ -126,15 +126,34 @@ class Sonic():
     config_file = os.path.join(BASE_DIR, 'config/inference/sonic.yaml')
     config = OmegaConf.load(config_file)
 
-    def __init__(self, 
+    def __init__(self,
                  device_id=0,
                  enable_interpolate_frame=True,
                  ):
-        
+
         config = self.config
         config.use_interframe = enable_interpolate_frame
 
-        device = 'cuda:{}'.format(device_id) if device_id > -1 else 'cpu'
+        requested_device_id = device_id
+        if requested_device_id < 0:
+            device = torch.device("cpu")
+            device_str = "cpu"
+        else:
+            if not torch.cuda.is_available():
+                raise RuntimeError(
+                    "CUDA was requested but no CUDA device is available. "
+                    "Set `device_id` to -1 to run on CPU explicitly."
+                )
+            try:
+                torch.cuda.get_device_properties(requested_device_id)
+                torch.zeros(1, device=torch.device(f"cuda:{requested_device_id}"))
+            except (AssertionError, RuntimeError) as err:
+                raise RuntimeError(
+                    f"CUDA device {requested_device_id} is unavailable: {err}. "
+                    "Ensure the GPU is free or choose a different device."
+                ) from err
+            device = torch.device(f"cuda:{requested_device_id}")
+            device_str = f"cuda:{requested_device_id}"
 
         config.pretrained_model_name_or_path = os.path.join(BASE_DIR, config.pretrained_model_name_or_path)
 
@@ -198,9 +217,9 @@ class Sonic():
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(os.path.join(BASE_DIR, 'checkpoints/whisper-tiny/'))
 
         det_path = os.path.join(BASE_DIR, os.path.join(BASE_DIR, 'checkpoints/yoloface_v5m.pt'))
-        self.face_det = AlignImage(device, det_path=det_path)
+        self.face_det = AlignImage(device_str, det_path=det_path)
         if config.use_interframe:
-            rife = RIFEModel(device=device)
+            rife = RIFEModel(device=device_str)
             rife.load_model(os.path.join(BASE_DIR, 'checkpoints', 'RIFE/'))
             self.rife = rife
 

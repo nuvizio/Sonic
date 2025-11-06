@@ -23,4 +23,6 @@ dependencies = [
     "tqdm",
     "librosa",
     "einops",
+    "opencv-python-headless",
+    "accelerate",
 ]
